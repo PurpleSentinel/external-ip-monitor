@@ -123,7 +123,15 @@ Generate a separate cron line for it. IPv4 and IPv6 are independent observations
 
 ## 7. Email notifications (optional)
 
-The tool can email you when the observed IP changes. Only changes trigger email: the first observation, unchanged samples and failed discoveries do not.
+The tool can email you when the observed IP changes, when the GeoIP country changes, or both. Choose with `notify_on`:
+
+| `notify_on` | Email when |
+| --- | --- |
+| `[ip_change]` (default) | The public IP differs from the last successful observation |
+| `[country_change]` | The GeoIP country code differs from the last known country; IP changes within a country are logged but not emailed |
+| `[ip_change, country_change]` | Either; a sample where both changed sends one email, headed as a country change |
+
+Only changes trigger email: the first observation, unchanged samples and failed discoveries do not. Country detection needs GeoIP enabled, and reflects the provider's database, not a physical location. For example, Starlink addresses are often placed in the country of the ground-station point of presence or of registration, which can differ from where the dish is. If GeoIP fails when the IP changes, the country change is reported at the next successful lookup.
 
 Store the SMTP password in a file only you can read. Most large providers require an app password rather than your normal login password.
 
@@ -139,6 +147,7 @@ Then enable the `email` section of `config.yaml`:
 ```yaml
 email:
   enabled: true
+  notify_on: [country_change]   # or [ip_change], or both
   smtp_host: smtp.gmail.com
   security: starttls              # port 587 by default; use tls for port 465
   username: you@gmail.com
@@ -170,7 +179,7 @@ Plaintext SMTP, including an unencrypted local relay on port 25, is deliberately
 How delivery behaves:
 
 - The email is sent after the observation is appended to the log and the state is saved, while the run still holds the lock. SMTP adds up to `timeout_seconds` per network operation to that run.
-- If delivery fails, the notice stays in `state.json` (`notify_pending`) and is retried at each later due sample that discovers an IP. The run exits with code 3 and writes the reason to stderr, so keep the cron stderr redirect from section 4. If the IP changes again before delivery, the newer change replaces the queued one; the JSONL log still has both.
+- If delivery fails, the notice stays in `state.json` (`notify_pending`) and is retried at each later due sample that discovers an IP. The run exits with code 3 and writes the reason to stderr, so keep the cron stderr redirect from section 4. Changes that occur before delivery succeeds are queued in order and sent together in one email, so a later IP-only change cannot hide an earlier country change. The queue holds up to 50 changes; beyond that, the oldest IP-only changes are dropped first and the email says how many. The JSONL log keeps everything.
 - If the server accepts some recipients and refuses others, the message is not resent; the refused addresses are reported on stderr.
 - Messages contain the new and previous IP, host, label, time, and GeoIP location and ISP when available. Treat them as you treat the log.
 

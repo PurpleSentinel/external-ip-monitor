@@ -52,9 +52,10 @@ def tls_context(email):
 
 
 def notice_from(record):
-    """The subset of an observation record that an IP-change email needs."""
+    """The subset of an observation record that a change email needs."""
     return {key: record[key] for key in ("record_id", "timestamp_utc", "hostname", "label",
-        "family", "ip", "previous_ip", "ip_source")} | {"geoip": record["geoip"]["data"]}
+        "family", "ip", "previous_ip", "changed", "ip_source", "country_code",
+        "previous_country_code", "country_changed")} | {"geoip": record["geoip"]["data"]}
 
 
 def clean(value):
@@ -74,22 +75,30 @@ def message(email, subject, body):
     return msg
 
 
-def compose(email, pending):
-    n = pending["notice"]
-    family = "IPv4" if n["family"] == "ipv4" else "IPv6"
-    who = n["label"] or n["hostname"]
-    lines = [f"The external {family} address observed by host {clean(n['hostname'])}"
-             + (f" (label {clean(n['label'])})" if n["label"] else "") + " changed.", "",
-             f"  New IP:       {n['ip']}",
+def family_name(notice):
+    return "IPv4" if notice["family"] == "ipv4" else "IPv6"
+
+
+def describe(n):
+    family = family_name(n)
+    if n.get("country_changed"):
+        headline = f"Country changed: {clean(n['previous_country_code'])} -> {clean(n['country_code'])}"
+    else:
+        headline = f"External {family} address changed"
+    country = clean(n.get("country_code") or "unknown")
+    if n.get("previous_country_code"):
+        country += f" (previous {clean(n['previous_country_code'])})"
+    lines = [headline,
+             f"  IP:           {n['ip']}" + ("" if n.get("changed") else " (unchanged)"),
              f"  Previous IP:  {n['previous_ip']}",
+             f"  Country:      {country}",
              f"  Observed at:  {n['timestamp_utc']}",
              f"  IP source:    {n['ip_source']}"]
     geo = n.get("geoip")
     if geo:
         place = ", ".join(clean(geo[k]) for k in ("city", "region", "country") if geo.get(k))
         if place:
-            code = f" ({clean(geo['country_code'])})" if geo.get("country_code") else ""
-            lines.append(f"  Location:     {place}{code} (GeoIP estimate)")
+            lines.append(f"  Location:     {place} (GeoIP estimate)")
         network = " ".join(x for x in (f"AS{geo['asn']}" if geo.get("asn") else "",
                                         clean(geo.get("isp") or "")) if x)
         if network:
@@ -97,11 +106,36 @@ def compose(email, pending):
     else:
         lines.append("  Location:     unavailable (GeoIP disabled or failed)")
     lines.append(f"  Record ID:    {n['record_id']}")
+    return lines
+
+
+def compose(email, pending):
+    notices = pending["notices"]
+    latest = notices[-1]
+    who = clean(latest["label"] or latest["hostname"])
+    # A country change is the more significant event, so it leads the subject.
+    country_changes = [n for n in notices if n.get("country_changed")]
+    if country_changes:
+        c = country_changes[-1]
+        subject = (f"{who}: country changed {clean(c['previous_country_code'])} -> {clean(c['country_code'])}"
+                   f" ({family_name(c)} {c['ip']})")
+    else:
+        subject = f"{who}: external {family_name(latest)} changed to {latest['ip']}"
+    if len(notices) > 1:
+        subject += f" [{len(notices)} changes]"
+    host = clean(latest["hostname"]) + (f" (label {clean(latest['label'])})" if latest["label"] else "")
+    count = "a change" if len(notices) == 1 else f"{len(notices)} changes, oldest first"
+    lines = [f"ipwatch on host {host} observed {count}:", ""]
+    for n in notices:
+        lines += describe(n) + [""]
+    if pending.get("dropped"):
+        lines.append(f"{pending['dropped']} older IP-only change(s) were dropped from this queue; see the log.")
     if pending.get("attempts"):
-        lines += ["", f"Delivery was delayed: {pending['attempts']} earlier attempt(s) failed."
-                  f" Last error: {clean(pending.get('last_error'))}"]
-    lines += ["", "Sent by ipwatch. The full history is in the JSON Lines log on that host.", ""]
-    return message(email, f"{clean(who)}: external {family} changed to {n['ip']}", "\n".join(lines))
+        lines.append(f"Delivery was delayed: {pending['attempts']} earlier attempt(s) failed."
+                     f" Last error: {clean(pending.get('last_error'))}")
+    lines += ["GeoIP country is a provider estimate for the IP, not a physical location.",
+              "Sent by ipwatch. The full history is in the JSON Lines log on that host.", ""]
+    return message(email, subject, "\n".join(lines))
 
 
 def compose_test(email, hostname, label):

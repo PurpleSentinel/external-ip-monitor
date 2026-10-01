@@ -20,7 +20,8 @@ Copy the supplied `config.example.yaml`. Omitted sections use defaults. Unknown 
 | `geoip.enabled` | `true` | Enrich successful observations |
 | `geoip.endpoint` | `https://ipwho.is/{ip}` | Exactly one `{ip}` placeholder; ipwho.is-compatible JSON |
 | `geoip.cache_ttl_minutes` | `1440` | Successful lookup reuse; 0 to 525600; zero disables reuse |
-| `email.enabled` | `false` | Email when the observed IP changes |
+| `email.enabled` | `false` | Send change emails |
+| `email.notify_on` | `[ip_change]` | Nonempty list: `ip_change` (observed IP differs from the last successful one) and/or `country_change` (GeoIP country code differs from the last known one). `country_change` requires `geoip.enabled: true` |
 | `email.smtp_host` | none | SMTP server hostname; required when enabled |
 | `email.smtp_port` | `587` (`starttls`) or `465` (`tls`) | 1 to 65535 |
 | `email.security` | `starttls` | `starttls` (upgrade a plain connection; refused if not offered) or `tls` (implicit TLS). No plaintext option |
@@ -40,6 +41,8 @@ HTTPS URLs must contain a hostname, cannot contain credentials or fragments, and
 Requests use normal TLS verification. Curl's default `.curlrc` is disabled to prevent hidden flags from changing behavior. The process still inherits its environment, including custom CA settings and, if allowed, proxies. Attempts are immediate and bounded; provider failures are retried up to the configured count, then the next discovery endpoint is tried. The monitor does not wait for long provider Retry-After periods; failed lookup is recorded and retried at the next due sample.
 
 The `{ip}` substitution is made only after successful IP parsing, so it cannot insert shell commands or arbitrary URL characters. Commands are passed as argument arrays without invoking a shell. Enrichment transport does not force a family: for example, an IPv6 observation can be enriched by querying the provider over IPv4.
+
+With `notify_on: [country_change]`, IP changes within one country are recorded in the log but do not send email. With both triggers, each qualifying observation sends one email; when both changed, it is presented as a country change. Country comparison uses the provider's `country_code`, and its sensitivity depends on `geoip.cache_ttl_minutes`: an IP change always triggers a fresh lookup, but a provider reassigning an unchanged IP is noticed only when the cache entry expires.
 
 The `email` section is validated even when disabled, so a configuration can be prepared before it is switched on. A `password` key is rejected: secrets belong in `password_file` or `password_env`, not in YAML that might be copied or committed. SMTP always uses TLS with certificate and hostname verification and a TLS 1.2 minimum. With `starttls`, the tool stops before authentication if the server does not offer STARTTLS. `check` reads the password source and `ca_file` but makes no network connection; `test-email` performs a real delivery.
 

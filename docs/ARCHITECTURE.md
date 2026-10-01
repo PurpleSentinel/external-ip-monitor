@@ -8,8 +8,8 @@ The process runs once and exits. Cron handles repeated invocation; an interval g
 4. `discover` requests configured endpoints in order with curl, enforcing family and public-address validation.
 5. The enrichment adapter looks up the accepted IP or uses a valid cached lookup.
 6. The record is serialized and appended to the log, flushed and fsynced.
-7. State is atomically replaced with the updated baseline and cache. If email is enabled and the IP changed, the notice is queued in this same state write.
-8. Any queued email is sent over verified TLS. On success the queue is cleared; on failure it stays queued for the next due sample. The lock is released.
+7. Country change is computed against the last known country code. State is atomically replaced with the updated IP and country baselines and cache. If email is enabled and a configured trigger (`ip_change`, `country_change`) fired, the notice is appended to the queue in this same state write.
+8. All queued notices are sent in one email over verified TLS. On success the queue is cleared; on failure it stays queued for the next due sample. The lock is released.
 
 | Module | Responsibility | Extension approach |
 | --- | --- | --- |
@@ -17,7 +17,7 @@ The process runs once and exits. Cron handles repeated invocation; an interval g
 | `transport.py` | Bounded HTTPS curl subprocesses | Add explicit network features without arbitrary shell flags |
 | `geo.py` | ipwho.is-compatible provider response normalization | Add adapter dispatch for other HTTP providers or local MMDB databases |
 | `storage.py` | Locking, JSONL append, atomic JSON state | Add remote forwarding or database sink as a separate layer |
-| `monitor.py` | Scheduling gate, observation, change detection, caching, notification queue | Add further alert channels after a successful durable observation |
+| `monitor.py` | Scheduling gate, observation, IP and country change detection, caching, notification queue | Add further alert channels after a successful durable observation |
 | `notify.py` | Email composition, password loading, TLS-verified SMTP delivery | Add other notification transports behind the same queue |
 | `cli.py` | Commands, exit codes and generated cron line | Add export/query commands without altering cron behavior |
 
@@ -33,6 +33,6 @@ The current tool cannot distinguish whether an observed IPv4 changed because of 
 
 ## Verification
 
-The suite covers arbitrary-minute intervals, cross-hour behavior, start-up jitter around the due boundary, force runs, backwards clocks, change detection across failures, IPv6, invalid/nonpublic addresses, fallback endpoints, GeoIP response validation, cache TTL and size bounds, malformed YAML/state, log write failures, permission defaults, process contention, and cron path quoting. Email tests cover configuration validation, password-file permissions, message content, queueing and retry, and old-state compatibility. They also drive real `smtplib` against a local SMTP server over STARTTLS and implicit TLS, checking certificate rejection, a server without STARTTLS, failed authentication and partially refused recipients.
+The suite covers arbitrary-minute intervals, cross-hour behavior, start-up jitter around the due boundary, force runs, backwards clocks, change detection across failures, IPv6, invalid/nonpublic addresses, fallback endpoints, GeoIP response validation, cache TTL and size bounds, malformed YAML/state, log write failures, permission defaults, process contention, and cron path quoting. Email tests cover configuration validation, `notify_on` trigger selection, country baselines across GeoIP failures, queue ordering and overflow, password-file permissions, message content, queueing and retry, and old-state compatibility. They also drive real `smtplib` against a local SMTP server over STARTTLS and implicit TLS, checking certificate rejection, a server without STARTTLS, failed authentication and partially refused recipients.
 
 Process-boundary tests use a fake curl executable to inspect arguments and a local TLS server to exercise the real curl executable through the installed CLI. Local TLS checks verify both accepted certificates and rejection with an invalid CA bundle. Public provider availability is an operational dependency, not a condition for these deterministic tests.

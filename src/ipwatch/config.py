@@ -93,6 +93,10 @@ class EmailConfig:
     recipients: tuple[str, ...]
     subject_prefix: str
     timeout_seconds: int
+    notify_on: tuple[str, ...] = ("ip_change",)
+
+
+NOTIFY_TRIGGERS = ("ip_change", "country_change")
 
 
 @dataclass(frozen=True)
@@ -119,12 +123,16 @@ class Config:
 
 def load_email(section, resolve):
     """Return EmailConfig when enabled, else None; values are validated either way."""
-    allowed = {"enabled", "smtp_host", "smtp_port", "security", "ca_file", "username",
+    allowed = {"enabled", "notify_on", "smtp_host", "smtp_port", "security", "ca_file", "username",
         "password_file", "password_env", "from", "to", "subject_prefix", "timeout_seconds"}
     if isinstance(section, dict) and "password" in section:
         raise ConfigError("email.password is not supported; use email.password_file or email.password_env")
     em = mapping(section, "email", allowed)
     enabled = boolean(em.get("enabled", False), "email.enabled")
+    notify_on = em.get("notify_on", ["ip_change"])
+    if (not isinstance(notify_on, list) or not notify_on or len(set(notify_on)) != len(notify_on)
+            or any(v not in NOTIFY_TRIGGERS for v in notify_on)):
+        raise ConfigError("email.notify_on must be a nonempty list of ip_change and/or country_change")
     security = em.get("security", "starttls")
     if security not in ("starttls", "tls"):
         raise ConfigError("email.security must be starttls or tls; plaintext SMTP is not supported")
@@ -160,7 +168,7 @@ def load_email(section, resolve):
     if host is None or sender is None or not recipients:
         raise ConfigError("Enabled email requires email.smtp_host, email.from and at least one email.to")
     return EmailConfig(host, port, security, ca_file, username, password_file, password_env,
-        sender, recipients, prefix, timeout)
+        sender, recipients, prefix, timeout, tuple(notify_on))
 
 
 def load_config(filename):
@@ -201,6 +209,9 @@ def load_config(filename):
     if geo_endpoint.count("{ip}") != 1 or "{" in geo_endpoint.replace("{ip}", "") or "}" in geo_endpoint.replace("{ip}", ""):
         raise ConfigError("geoip.endpoint must contain exactly one {ip} placeholder")
     https_url(geo_endpoint.replace("{ip}", "8.8.8.8"), "geoip.endpoint")
+    geo_enabled = boolean(geo.get("enabled", True), "geoip.enabled")
+    if email and "country_change" in email.notify_on and not geo_enabled:
+        raise ConfigError("email.notify_on: country_change requires geoip.enabled: true")
     timeout = integer(net.get("timeout_seconds", 15), "network.timeout_seconds", 1, 120)
     connect = integer(net.get("connect_timeout_seconds", 5), "network.connect_timeout_seconds", 1, timeout)
     interface = net.get("interface")
@@ -211,6 +222,6 @@ def load_config(filename):
         integer(net.get("attempts", 2), "network.attempts", 1, 3),
         boolean(net.get("bypass_proxy", True), "network.bypass_proxy"),
         string(interface, "network.interface") if interface is not None else None,
-        boolean(geo.get("enabled", True), "geoip.enabled"), geo_endpoint,
+        geo_enabled, geo_endpoint,
         integer(geo.get("cache_ttl_minutes", 1440), "geoip.cache_ttl_minutes", 0, 525600),
         string(label, "label") if label is not None else None, email)

@@ -12,7 +12,8 @@ A small Linux CLI that records the public IP seen by an Internet service, enrich
 - GeoIP caching across cron invocations, with configurable refresh time.
 - Every scheduled observation retained, even when the IP is unchanged.
 - IP change detection against the last successful observation.
-- Optional email on IP change over verified TLS (STARTTLS or implicit TLS), with queued retry.
+- GeoIP country change detection, recorded on every observation.
+- Optional email on IP change, GeoIP country change, or both, over verified TLS (STARTTLS or implicit TLS), with queued retry.
 - Failure records, and partial records when GeoIP enrichment is unavailable.
 - Linux process locking and atomic state replacement.
 - Unit and local HTTPS integration tests.
@@ -60,6 +61,9 @@ The following is an illustrative record, formatted here for readability. The act
   "ip": "8.8.8.8",
   "previous_ip": "1.1.1.1",
   "changed": true,
+  "country_code": "XX",
+  "previous_country_code": "YY",
+  "country_changed": true,
   "geoip": {
     "status": "ok",
     "provider": "ipwhois",
@@ -89,7 +93,7 @@ The default discovery service is [ipify](https://www.ipify.org/). GeoIP uses the
 
 ## Email notifications
 
-Optionally, the tool emails you when the observed IP changes. It is off by default. When enabled:
+Optionally, the tool emails you when the observed IP changes, when its GeoIP country changes, or both, selected with `email.notify_on`. It is off by default. When enabled:
 
 - Mail is sent only over TLS: `starttls` (usually port 587) or `tls` (implicit TLS, usually port 465). There is no plaintext mode. The server certificate and hostname are verified against the system CA store, or a `ca_file` you supply, with TLS 1.2 or newer. If a server does not offer STARTTLS, nothing is sent, and the password is never transmitted.
 - The SMTP password is read from a `password_file` (a regular file owned by you with mode 0600) or an environment variable, never from the YAML file.

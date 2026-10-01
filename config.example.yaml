@@ -24,7 +24,8 @@ geoip:
   cache_ttl_minutes: 1440         # Refresh once per day for an unchanged IP; 0 disables reuse
 
 email:
-  enabled: false                  # true: send an email when the observed IP changes
+  enabled: false                  # true: send change emails
+  notify_on: [ip_change]          # ip_change and/or country_change (GeoIP country code)
   smtp_host: smtp.example.com
   smtp_port: 587                  # Default: 587 for starttls, 465 for tls
   security: starttls              # starttls or tls (implicit TLS); plaintext SMTP is not supported
