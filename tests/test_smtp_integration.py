@@ -134,7 +134,7 @@ class SMTPIntegrationTests(unittest.TestCase):
         return load_config(case / "config.yaml").email
 
     def send_test(self, email):
-        return send(email, compose_test(email, "testhost", "starlink-home"))
+        return send(email, compose_test(email, "testhost", "example-home"))
 
     def test_starttls_authenticates_only_after_tls(self):
         server = self.start()
@@ -143,7 +143,7 @@ class SMTPIntegrationTests(unittest.TestCase):
         self.assertEqual(auth, [("auth", True, "me@example.com", "s3cret")])
         data = [e for e in server.events if e[0] == "data"]
         self.assertTrue(data and data[0][1], "message must be sent inside TLS")
-        self.assertIn("Subject: [ipwatch] starlink-home: test message", data[0][2])
+        self.assertIn("Subject: [ipwatch] example-home: test message", data[0][2])
         self.assertEqual({e[2] for e in server.events if e[0] == "rcpt"}, {"me@example.com", "other@example.com"})
 
     def test_implicit_tls(self):

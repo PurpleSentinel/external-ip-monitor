@@ -13,11 +13,12 @@ from ipwatch.notify import NotifyError, compose, read_password
 from ipwatch.transport import RequestError
 
 
-GEO = {"success": True, "ip": "1.1.1.1", "country": "Isle of Man", "country_code": "IM",
-       "city": "Middle", "connection": {"asn": 14593, "isp": "Space Exploration Technologies"}}
+# Fictional values: XA/XB are ISO 3166 user-assigned codes; ASN 64500 is reserved for documentation.
+GEO = {"success": True, "ip": "1.1.1.1", "country": "Example Country", "country_code": "XA",
+       "city": "Example City", "connection": {"asn": 64500, "isp": "Example ISP"}}
 
 EMAIL_YAML = """interval_minutes: 5
-label: starlink-home
+label: example-home
 email:
   enabled: true
   smtp_host: smtp.example.com
@@ -259,11 +260,11 @@ class NotificationFlowTests(unittest.TestCase):
         body = msg.get_content()
         self.assertEqual(msg["From"], "ipwatch <ipwatch@example.com>")
         self.assertEqual(msg["To"], "me@example.com")
-        self.assertTrue(msg["Subject"].startswith("[ipwatch] starlink-home: external IPv4 changed"))
+        self.assertTrue(msg["Subject"].startswith("[ipwatch] example-home: external IPv4 changed"))
         self.assertTrue(msg["Message-ID"].endswith("@example.com>"))
-        self.assertIn("Middle, Isle of Man (GeoIP estimate)", body)
-        self.assertIn("Country:      IM (previous IM)", body)
-        self.assertIn("AS14593 Space Exploration Technologies", body)
+        self.assertIn("Example City, Example Country (GeoIP estimate)", body)
+        self.assertIn("Country:      XA (previous XA)", body)
+        self.assertIn("AS64500 Example ISP", body)
 
     def test_provider_control_characters_do_not_reach_message(self):
         notice = {"record_id": "r", "timestamp_utc": "t", "hostname": "h", "label": None, "family": "ipv6",
@@ -275,10 +276,10 @@ class NotificationFlowTests(unittest.TestCase):
         self.assertIsNone(msg["Bcc"])
         self.assertIn("external IPv6 changed to 2001:db8::1", msg["Subject"])
         # Country codes come from the provider and reach the Subject header.
-        notice |= {"country_code": "GB\r\nBcc: x@example.com", "previous_country_code": "IM", "country_changed": True}
+        notice |= {"country_code": "XB\r\nBcc: x@example.com", "previous_country_code": "XA", "country_changed": True}
         msg = compose(self.config.email, {"attempts": 0, "last_error": None, "notices": [notice]})
         self.assertIsNone(msg["Bcc"])
-        self.assertIn("country changed IM -> GBBcc", msg["Subject"])
+        self.assertIn("country changed XA -> XBBcc", msg["Subject"])
 
 
 def geo(ip, country_code, country="Somewhere"):
@@ -303,29 +304,29 @@ class CountryChangeTests(unittest.TestCase):
 
     def test_record_country_fields_and_baseline(self):
         c, mailer = self.config("ip_change"), FakeMailer()
-        first, _ = self.sample(c, "8.8.8.8", geo("8.8.8.8", "IM"), 0, mailer)
+        first, _ = self.sample(c, "8.8.8.8", geo("8.8.8.8", "XA"), 0, mailer)
         self.assertEqual((first["country_code"], first["previous_country_code"], first["country_changed"]),
-                         ("IM", None, None))
-        same, _ = self.sample(c, "8.8.8.8", geo("8.8.8.8", "IM"), 300, mailer)
-        self.assertEqual((same["previous_country_code"], same["country_changed"]), ("IM", False))
+                         ("XA", None, None))
+        same, _ = self.sample(c, "8.8.8.8", geo("8.8.8.8", "XA"), 300, mailer)
+        self.assertEqual((same["previous_country_code"], same["country_changed"]), ("XA", False))
         # A failed lookup leaves the country unknown and the baseline intact...
         failed, _ = self.sample(c, "1.1.1.1", "<html>", 600, mailer)
         self.assertEqual((failed["country_code"], failed["country_changed"]), (None, None))
         # ...so the change is detected at the next successful lookup, not missed.
-        later, _ = self.sample(c, "1.1.1.1", geo("1.1.1.1", "GB"), 900, mailer)
+        later, _ = self.sample(c, "1.1.1.1", geo("1.1.1.1", "XB"), 900, mailer)
         self.assertEqual((later["previous_country_code"], later["country_changed"], later["changed"]),
-                         ("IM", True, False))
+                         ("XA", True, False))
 
     def test_country_only_ignores_ip_changes_within_a_country(self):
         c, mailer = self.config("country_change"), FakeMailer()
-        self.sample(c, "8.8.8.8", geo("8.8.8.8", "IM"), 0, mailer)
-        self.sample(c, "1.1.1.1", geo("1.1.1.1", "IM"), 300, mailer)
+        self.sample(c, "8.8.8.8", geo("8.8.8.8", "XA"), 0, mailer)
+        self.sample(c, "1.1.1.1", geo("1.1.1.1", "XA"), 300, mailer)
         self.assertEqual(mailer.sent, [])
-        record, code = self.sample(c, "9.9.9.9", geo("9.9.9.9", "GB", "United Kingdom"), 600, mailer)
+        record, code = self.sample(c, "9.9.9.9", geo("9.9.9.9", "XB", "United Kingdom"), 600, mailer)
         self.assertEqual((code, len(mailer.sent)), (0, 1))
         msg = mailer.sent[0]
-        self.assertEqual(msg["Subject"], "[ipwatch] starlink-home: country changed IM -> GB (IPv4 9.9.9.9)")
-        self.assertIn("Country changed: IM -> GB", msg.get_content())
+        self.assertEqual(msg["Subject"], "[ipwatch] example-home: country changed XA -> XB (IPv4 9.9.9.9)")
+        self.assertIn("Country changed: XA -> XB", msg.get_content())
         self.assertIn(record["record_id"], msg.get_content())
 
     def test_country_change_without_ip_change(self):
@@ -335,33 +336,33 @@ class CountryChangeTests(unittest.TestCase):
                 for f in (self.base.state_file, self.base.log_file):
                     f.unlink(missing_ok=True)
                 c, mailer = self.config(*triggers), FakeMailer()
-                self.sample(c, "8.8.8.8", geo("8.8.8.8", "IM"), 0, mailer)
-                self.sample(c, "8.8.8.8", geo("8.8.8.8", "GB"), 300, mailer)
+                self.sample(c, "8.8.8.8", geo("8.8.8.8", "XA"), 0, mailer)
+                self.sample(c, "8.8.8.8", geo("8.8.8.8", "XB"), 300, mailer)
                 self.assertEqual(len(mailer.sent), expected)
                 if expected:
                     self.assertIn("IP:           8.8.8.8 (unchanged)", mailer.sent[0].get_content())
 
     def test_both_triggers_send_one_email_per_change(self):
         c, mailer = self.config("ip_change", "country_change"), FakeMailer()
-        self.sample(c, "8.8.8.8", geo("8.8.8.8", "IM"), 0, mailer)
-        self.sample(c, "1.1.1.1", geo("1.1.1.1", "IM"), 300, mailer)  # IP change
-        self.sample(c, "9.9.9.9", geo("9.9.9.9", "GB"), 600, mailer)  # IP and country change
+        self.sample(c, "8.8.8.8", geo("8.8.8.8", "XA"), 0, mailer)
+        self.sample(c, "1.1.1.1", geo("1.1.1.1", "XA"), 300, mailer)  # IP change
+        self.sample(c, "9.9.9.9", geo("9.9.9.9", "XB"), 600, mailer)  # IP and country change
         self.assertEqual(len(mailer.sent), 2)
         self.assertIn("external IPv4 changed to 1.1.1.1", mailer.sent[0]["Subject"])
-        self.assertIn("country changed IM -> GB", mailer.sent[1]["Subject"])
+        self.assertIn("country changed XA -> XB", mailer.sent[1]["Subject"])
 
     def test_queued_country_change_is_not_hidden_by_later_ip_change(self):
         c, mailer = self.config("ip_change", "country_change"), FakeMailer(failures=1)
-        self.sample(c, "8.8.8.8", geo("8.8.8.8", "IM"), 0, mailer)
+        self.sample(c, "8.8.8.8", geo("8.8.8.8", "XA"), 0, mailer)
         with patch("sys.stderr"):
-            _, code = self.sample(c, "9.9.9.9", geo("9.9.9.9", "GB"), 300, mailer)  # delivery fails
+            _, code = self.sample(c, "9.9.9.9", geo("9.9.9.9", "XB"), 300, mailer)  # delivery fails
         self.assertEqual(code, 3)
-        self.sample(c, "1.1.1.1", geo("1.1.1.1", "GB"), 600, mailer)  # IP-only change; retry succeeds
+        self.sample(c, "1.1.1.1", geo("1.1.1.1", "XB"), 600, mailer)  # IP-only change; retry succeeds
         self.assertEqual(len(mailer.sent), 1)
         msg = mailer.sent[0]
-        self.assertEqual(msg["Subject"], "[ipwatch] starlink-home: country changed IM -> GB (IPv4 9.9.9.9) [2 changes]")
+        self.assertEqual(msg["Subject"], "[ipwatch] example-home: country changed XA -> XB (IPv4 9.9.9.9) [2 changes]")
         body = msg.get_content()
-        self.assertLess(body.index("Country changed: IM -> GB"), body.index("External IPv4 address changed"))
+        self.assertLess(body.index("Country changed: XA -> XB"), body.index("External IPv4 address changed"))
         self.assertIn("1 earlier attempt(s) failed", body)
 
     def test_queue_overflow_drops_ip_only_notices_first(self):
@@ -369,7 +370,7 @@ class CountryChangeTests(unittest.TestCase):
         state = {"notify_pending": None}
         record = {"record_id": "r", "timestamp_utc": "t", "hostname": "h", "label": None, "family": "ipv4",
             "ip": "8.8.8.8", "previous_ip": "1.1.1.1", "changed": True, "ip_source": "s",
-            "country_code": "GB", "previous_country_code": "IM", "geoip": {"data": None}}
+            "country_code": "XB", "previous_country_code": "XA", "geoip": {"data": None}}
         queue_notice(state, record | {"record_id": "country", "country_changed": True})
         for i in range(MAX_QUEUED_NOTICES):
             queue_notice(state, record | {"record_id": f"ip{i}", "country_changed": False})
