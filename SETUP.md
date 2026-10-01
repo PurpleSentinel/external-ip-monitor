@@ -140,7 +140,7 @@ mkdir -p ~/.config/ipwatch
 ( umask 077; printf '%s\n' 'YOUR-APP-PASSWORD' > ~/.config/ipwatch/smtp-password )
 ```
 
-Typing the password on the command line leaves it in shell history; to avoid that, open the file in an editor instead and then run `chmod 600` on it. The tool refuses a password file that is group- or world-readable, not owned by you, or a symlink. Alternatively, set `password_env` to the name of an environment variable; cron starts with a minimal environment, so the file is usually simpler.
+Typing the password on the command line leaves it in shell history; to avoid that, open the file in an editor instead and then run `chmod 600` on it. The tool refuses a password file that is group- or world-readable, not owned by you, or a symlink. Keep it outside the repository; as a safety net, `.gitignore` also excludes files named `smtp-password` or `smtp-password.*` and any `secrets/` directory. Alternatively, set `password_env` to the name of an environment variable; cron starts with a minimal environment, so the file is usually simpler.
 
 Then enable the `email` section of `config.yaml`:
 
