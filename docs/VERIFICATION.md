@@ -1,4 +1,6 @@
-# Verification for version 0.1.0
+# Verification
+
+## 0.1.0
 
 Verified on Linux on 2026-10-01 with Python 3.12.14, PyYAML 6.0.3 and curl 8.5.0.
 
@@ -17,9 +19,15 @@ The tests do not make public API calls. Default endpoint selection and response 
 
 Public provider availability, quotas and geolocation accuracy remain runtime dependencies. Cron itself was not installed or changed in the development environment. No CI workflow is included in the repository; only the local runs listed here were executed.
 
-## Unreleased changes
+## 1.0.0
 
-Verified on Linux (Fedora 44) on 2026-10-01 with Python 3.14.7, OpenSSL 3.5.8 and PyYAML 6.0.3: all 64 unittest tests passed, with ResourceWarnings treated as errors. This includes a regression test for start-up jitter at the interval boundary the email notification and country-change tests, and the systemd unit tests. The generated units passed `systemd-analyze --user verify` (systemd 259). An argument-printing unit, linked into the user manager, confirmed that a path containing spaces, `%h`, `$HOME`, quotes, a backslash and a semicolon reaches the program unchanged. SMTP integration tests run real `smtplib` against a local TLS SMTP server; no external mail provider was contacted.
+Verified on Linux (Fedora 44) on 2026-10-01 with Python 3.14.7, OpenSSL 3.5.8 and PyYAML 6.0.3: all 64 unittest tests passed, with ResourceWarnings treated as errors. This includes a regression test for start-up jitter at the interval boundary, the email notification and country-change tests, and the systemd unit tests. The generated units passed `systemd-analyze --user verify` (systemd 259). An argument-printing unit, linked into the user manager, confirmed that a path containing spaces, `%h`, `$HOME`, quotes, a backslash and a semicolon reaches the program unchanged. SMTP integration tests run real `smtplib` against a local TLS SMTP server, so the test suite contacts no external mail provider.
+
+End-to-end on a live installation (Fedora 44, Starlink connection, systemd user timer):
+
+- `ipwatch test-email` delivered through a hosted mail provider over STARTTLS on port 587, with SMTP authentication.
+- A country change, simulated by editing the remembered country in the state file, was detected by a timer-started run, and the change email was delivered to the inbox.
+- `systemd-units --write` and `enable --now` installed the timer. Runs on the minute succeeded across interval changes made in the YAML only.
 
 To reproduce:
 

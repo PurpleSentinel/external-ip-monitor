@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.0.0 - 2026-10-01
 
 - Add [docs/SYSTEMD.md](docs/SYSTEMD.md): how the systemd timer works; behaviour across login, logout, lingering, boot and suspend; control commands; drop-in customisation; logs, exit codes and troubleshooting.
 - Add `ipwatch systemd-units` to print, or `--write`, a systemd user service and timer, for hosts without cron such as Fedora Workstation. The timer fires on the minute (`AccuracySec=1s`), and exit codes 1 and 3 count as success. Paths are escaped for systemd's `%` and `$` handling. Installation never silently replaces changed unit files.
