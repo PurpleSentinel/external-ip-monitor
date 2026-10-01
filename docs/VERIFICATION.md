@@ -15,7 +15,11 @@ The tests do not make public API calls. Default endpoint selection and response 
 - https://ipwhois.io/documentation
 - https://curl.se/docs/manpage.html
 
-Public provider availability, quotas and geolocation accuracy remain runtime dependencies. Cron itself was not installed or changed in the development environment. The GitHub workflow declares Python 3.10, 3.12 and 3.13 checks; only the local Python 3.12 run was executed during delivery.
+Public provider availability, quotas and geolocation accuracy remain runtime dependencies. Cron itself was not installed or changed in the development environment. No CI workflow is included in the repository; only the local runs listed here were executed.
+
+## Unreleased changes
+
+Verified on Linux (Fedora 44) on 2026-10-01 with Python 3.14 and PyYAML 6.0.3: all 27 unittest tests passed, including a new regression test for start-up jitter at the interval boundary.
 
 To reproduce:
 

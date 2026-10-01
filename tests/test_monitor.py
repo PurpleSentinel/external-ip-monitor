@@ -50,7 +50,7 @@ class MonitorTests(unittest.TestCase):
     def test_interval_crosses_hour_and_force(self):
         c = dataclasses.replace(self.config, geo_enabled=False)
         first, _ = run(c, client=FakeClient(["8.8.8.8"]), now=3500)
-        skipped, code = run(c, client=FakeClient([]), now=3919)
+        skipped, code = run(c, client=FakeClient([]), now=3889)
         self.assertIsNone(skipped)
         self.assertEqual(code, 0)
         run(c, client=FakeClient(["8.8.8.8"]), now=3920)
@@ -61,6 +61,14 @@ class MonitorTests(unittest.TestCase):
         self.assertFalse(records[1]["changed"])
         self.assertTrue(records[2]["changed"])
         self.assertEqual(records[2]["previous_ip"], "8.8.8.8")
+
+    def test_startup_jitter_does_not_skip_a_minute(self):
+        c = dataclasses.replace(self.config, interval_minutes=5, geo_enabled=False)
+        run(c, client=FakeClient(["8.8.8.8"]), now=0.4)
+        self.assertIsNone(run(c, client=FakeClient([]), now=240.1)[0])
+        # Next cron tick starts slightly earlier within its second than the last one did.
+        self.assertIsNotNone(run(c, client=FakeClient(["8.8.8.8"]), now=300.2)[0])
+        self.assertEqual(len(self.records()), 2)
 
     def test_failure_is_logged_and_throttled(self):
         record, code = run(self.config, client=FakeClient([RequestError("timeout")]), now=1000)

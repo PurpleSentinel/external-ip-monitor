@@ -9,6 +9,11 @@ from .geo import GeoError, lookup
 from .storage import append_record, locked, read_state, write_state
 from .transport import CurlClient, RequestError
 
+# Cron fires on the minute, but each run records its attempt time a variable
+# fraction of a second later. Without slack, a run that starts marginally earlier
+# than the previous one sees 299.9 s for a 5-minute interval and slips a minute.
+DUE_GRACE_SECONDS = 30
+
 
 def timestamp(epoch):
     return datetime.fromtimestamp(epoch, timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
@@ -70,7 +75,7 @@ def run(config, force=False, client=None, now=None):
         state = read_state(config.state_file)
         previous_attempt = state["last_attempt_epoch"]
         if (not force and previous_attempt is not None
-                and 0 <= now - previous_attempt < config.interval_minutes * 60):
+                and 0 <= now - previous_attempt < config.interval_minutes * 60 - DUE_GRACE_SECONDS):
             return None, 0
         # Reserve this interval even when connectivity is down. A killed process can
         # leave a gap, but cannot trigger requests on every subsequent cron tick.
