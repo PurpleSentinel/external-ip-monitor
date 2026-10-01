@@ -36,7 +36,8 @@ def read_state(path):
         with path.open(encoding="utf-8") as handle:
             state = json.load(handle)
     except FileNotFoundError:
-        return {"schema_version": 1, "last_attempt_epoch": None, "last_success_ip": None, "geo_cache": {}}
+        return {"schema_version": 1, "last_attempt_epoch": None, "last_success_ip": None, "geo_cache": {},
+            "notify_pending": None}
     except (OSError, ValueError) as exc:
         raise StorageError("Cannot read state; repair or move the state file before retrying") from exc
     if not isinstance(state, dict) or state.get("schema_version") != 1:
@@ -56,6 +57,11 @@ def read_state(path):
             ipaddress.ip_address(last_ip)
         except (ValueError, TypeError) as exc:
             raise StorageError("Invalid state last_success_ip") from exc
+    # Optional, added after 0.1.0: an IP-change email awaiting delivery.
+    pending = state.setdefault("notify_pending", None)
+    if pending is not None and not (isinstance(pending, dict) and isinstance(pending.get("notice"), dict)
+            and type(pending.get("attempts")) is int):
+        raise StorageError("Invalid state notify_pending")
     return state
 
 

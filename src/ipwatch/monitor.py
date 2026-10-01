@@ -3,8 +3,10 @@ from datetime import datetime, timezone
 import ipaddress
 import math
 import socket
+import sys
 import time
 import uuid
+from . import notify
 from .geo import GeoError, lookup
 from .storage import append_record, locked, read_state, write_state
 from .transport import CurlClient, RequestError
@@ -65,9 +67,34 @@ def enrich(client, config, state, ip, now):
     return result, None
 
 
-def run(config, force=False, client=None, now=None):
+def warn(message):
+    print(f"ipwatch: {message}", file=sys.stderr)
+
+
+def deliver_pending(config, state, mailer):
+    """Send any queued IP-change email; return False if it stays queued for retry."""
+    pending = state.get("notify_pending")
+    if not pending:
+        return True
+    try:
+        refused = mailer(config.email, notify.compose(config.email, pending))
+    except notify.NotifyError as exc:
+        pending["attempts"] += 1
+        pending["last_error"] = str(exc)
+        write_state(config.state_file, state)
+        warn(f"email notification failed; will retry at the next due sample: {exc}")
+        return False
+    if refused:
+        warn(f"email notification refused for: {', '.join(refused)}")
+    state["notify_pending"] = None
+    write_state(config.state_file, state)
+    return True
+
+
+def run(config, force=False, client=None, now=None, mailer=None):
     """Return (record or None, exit code). Non-due/locked runs are successful no-ops."""
     client = client or CurlClient(config)
+    mailer = mailer or notify.send
     with locked(config.lock_file) as acquired:
         if not acquired:
             return None, 0
@@ -98,5 +125,13 @@ def run(config, force=False, client=None, now=None):
         append_record(config.log_file, record)
         if ip is not None:
             state["last_success_ip"] = ip
+        if config.email and record["changed"]:
+            # Queue before sending: an undelivered notice survives failures and crashes.
+            # A newer change replaces an older undelivered one; the log keeps both.
+            state["notify_pending"] = {"notice": notify.notice_from(record), "attempts": 0, "last_error": None}
         write_state(config.state_file, state)
-        return record, 1 if ip is None else 0
+        if ip is None:
+            return record, 1
+        if config.email and not deliver_pending(config, state, mailer):
+            return record, 3
+        return record, 0

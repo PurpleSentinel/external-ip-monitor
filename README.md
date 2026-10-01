@@ -12,6 +12,7 @@ A small Linux CLI that records the public IP seen by an Internet service, enrich
 - GeoIP caching across cron invocations, with configurable refresh time.
 - Every scheduled observation retained, even when the IP is unchanged.
 - IP change detection against the last successful observation.
+- Optional email on IP change over verified TLS (STARTTLS or implicit TLS), with queued retry.
 - Failure records, and partial records when GeoIP enrichment is unavailable.
 - Linux process locking and atomic state replacement.
 - Unit and local HTTPS integration tests.
@@ -43,7 +44,7 @@ Cron calls the tool every minute. `interval_minutes` in YAML determines when a s
 
 Default output is `var/history.jsonl`, relative to the YAML file's directory. Each newly written record occupies exactly one line. State and lock files live alongside it by default. The CLI stays silent during normal runs unless `--stdout` is supplied.
 
-See [SETUP.md](SETUP.md) for Linux setup, cron, rotation, IPv6 and troubleshooting.
+See [SETUP.md](SETUP.md) for Linux setup, cron, rotation, IPv6, email notifications and troubleshooting.
 
 ## Example record
 
@@ -86,6 +87,16 @@ GeoIP describes a provider's estimate for the public IP, which may reflect an IS
 
 The default discovery service is [ipify](https://www.ipify.org/). GeoIP uses the free [ipwho.is endpoint](https://ipwhois.io/documentation); consult its current terms, availability and quotas before deployment. Caching reduces requests, but rapidly changing IPs or many machines sharing an egress can still exhaust a quota. An HTTPS endpoint compatible with the ipwho.is schema can be substituted in YAML. Arbitrary provider schemas need a new adapter.
 
+## Email notifications
+
+Optionally, the tool emails you when the observed IP changes. It is off by default. When enabled:
+
+- Mail is sent only over TLS: `starttls` (usually port 587) or `tls` (implicit TLS, usually port 465). There is no plaintext mode. The server certificate and hostname are verified against the system CA store, or a `ca_file` you supply, with TLS 1.2 or newer. If a server does not offer STARTTLS, nothing is sent, and the password is never transmitted.
+- The SMTP password is read from a `password_file` (a regular file owned by you with mode 0600) or an environment variable, never from the YAML file.
+- The email is sent only after the change is written to the JSONL log. If sending fails, the notice stays queued in the state file and is retried at the next due sample; the run exits with code 3.
+
+`ipwatch test-email` checks the whole path: connection, TLS, login and delivery. See [SETUP.md](SETUP.md#7-email-notifications-optional) for setup and provider examples.
+
 ## Commands and exit codes
 
 | Command | Purpose |
@@ -94,6 +105,7 @@ The default discovery service is [ipify](https://www.ipify.org/). GeoIP uses the
 | `ipwatch run --config /absolute/config.yaml --force --stdout` | Sample immediately and also print the record |
 | `ipwatch check --config /absolute/config.yaml` | Validate configuration without network calls or writes |
 | `ipwatch cron-line --config /absolute/config.yaml` | Print a user-crontab entry |
+| `ipwatch test-email --config /absolute/config.yaml` | Send a test email with the configured SMTP settings |
 | `ipwatch --version` | Show version |
 
 | Exit code | Meaning |
@@ -101,6 +113,7 @@ The default discovery service is [ipify](https://www.ipify.org/). GeoIP uses the
 | 0 | IP recorded, optional GeoIP failure, not due, or another run holds the lock |
 | 1 | IP discovery failed; an error record was appended |
 | 2 | Configuration or storage error; inspect stderr |
+| 3 | IP recorded, but the change email failed (queued for retry) or some recipients were refused; inspect stderr |
 
 ## Repository layout
 
