@@ -49,7 +49,7 @@ systemctl --user enable --now ipwatch.timer
 
 **or** cron, by pasting the output of `.venv/bin/ipwatch cron-line --config "$PWD/config.yaml"` into `crontab -e` for the same user.
 
-Both commands generate entries with absolute paths to the current Python interpreter and YAML file. `cron-line` only prints; `systemd-units --write` installs the unit files but does not enable them. See [SETUP.md](SETUP.md#4-schedule-it) for details.
+Both commands generate entries with absolute paths to the current Python interpreter and YAML file. `cron-line` only prints; `systemd-units --write` installs the unit files but does not enable them. See [SETUP.md](SETUP.md#4-schedule-it) for details, and [docs/SYSTEMD.md](docs/SYSTEMD.md) for the systemd timer in depth.
 
 The scheduler calls the tool every minute. `interval_minutes` in YAML determines when a sample is due. Set it to `5`, `7`, `90`, or any positive whole number up to 525600. A sample is due once the interval minus 30 seconds has passed since the previous attempt started; the slack absorbs Python start-up jitter so a 5-minute interval does not slip to 6 minutes. There is no need to change the schedule when changing the interval. Avoid combining this gate with an `*/X` cron entry or a less frequent timer, which can delay observations further.
 

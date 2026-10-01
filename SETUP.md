@@ -67,7 +67,7 @@ The tool should be started every minute; `interval_minutes` decides when a sampl
 
 ### 4a. systemd user timer (recommended where cron is not installed, such as Fedora Workstation)
 
-Generate and install a service and timer for your user. No root access is needed:
+Generate and install a service and timer for your user. No root access is needed. [docs/SYSTEMD.md](docs/SYSTEMD.md) covers this option in depth: login and lingering, suspend, control commands, overrides and troubleshooting.
 
 ```bash
 .venv/bin/ipwatch systemd-units --config "$PWD/config.yaml" --write
