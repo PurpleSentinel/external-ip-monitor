@@ -1,0 +1,24 @@
+# Paths below are relative to THIS YAML file, not cron's working directory.
+interval_minutes: 5
+label: starlink-home
+
+output:
+  log_file: var/history.jsonl
+  state_file: var/state.json
+  lock_file: var/run.lock
+
+network:
+  family: ipv4                    # ipv4 or ipv6; use a separate config/state for each
+  endpoints:
+    - https://api.ipify.org       # Must return just a public IP as plain text
+  curl_binary: /usr/bin/curl
+  timeout_seconds: 15             # Per HTTP attempt
+  connect_timeout_seconds: 5
+  attempts: 2                     # Total attempts per URL, including the first
+  bypass_proxy: true              # Ignore HTTP(S)_PROXY environment variables
+  interface: null                # Optional interface name, e.g. eth0
+
+geoip:
+  enabled: true
+  endpoint: https://ipwho.is/{ip}  # Adapter requires the ipwho.is response schema
+  cache_ttl_minutes: 1440         # Refresh once per day for an unchanged IP; 0 disables reuse

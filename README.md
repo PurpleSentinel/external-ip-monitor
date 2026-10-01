@@ -1,0 +1,145 @@
+# External IP Monitor
+
+A small Linux CLI that records the public IP seen by an Internet service, enriches it with GeoIP data, and appends one serialized JSON object per line. Designed for cron, including Starlink connections, with no GUI or daemon.
+
+## Features
+
+- YAML configuration, including the sampling interval in minutes.
+- Actual `curl` execution for IP discovery and GeoIP HTTPS requests.
+- IPv4 or IPv6, selectable per configuration; optional interface binding.
+- Ordered discovery endpoints, bounded timeouts and configurable attempts.
+- Country, region, city, coordinates, timezone, ASN, ISP and organization enrichment.
+- GeoIP caching across cron invocations, with configurable refresh time.
+- Every scheduled observation retained, even when the IP is unchanged.
+- IP change detection against the last successful observation.
+- Failure records, and partial records when GeoIP enrichment is unavailable.
+- Linux process locking and atomic state replacement.
+- Tests and a GitHub Actions workflow.
+
+## Quick start
+
+Requires Linux, Python 3.10+, `curl`, and Python virtual environment support. On Debian/Ubuntu:
+
+```bash
+sudo apt-get update
+sudo apt-get install python3 python3-venv curl
+```
+
+Extract the ZIP, enter the repository, then:
+
+```bash
+python3 -m venv .venv
+.venv/bin/python -m pip install .
+cp config.example.yaml config.yaml
+# Edit config.yaml as needed.
+.venv/bin/ipwatch check --config "$PWD/config.yaml"
+.venv/bin/ipwatch run --config "$PWD/config.yaml" --force --stdout
+.venv/bin/ipwatch cron-line --config "$PWD/config.yaml"
+```
+
+Paste the final command's output into `crontab -e` for the same user. It prints a line containing absolute paths to the current Python interpreter and YAML file. It does not alter your crontab.
+
+Cron calls the tool every minute. `interval_minutes` in YAML determines when a sample is due. Set it to `5`, `7`, `90`, or any positive whole number up to 525600. There is no need to change the cron line when changing the interval. Avoid combining this gate with an `*/X` cron entry, which can delay observations further.
+
+Default output is `var/history.jsonl`, relative to the YAML file's directory. Each newly written record occupies exactly one line. State and lock files live alongside it by default. The CLI stays silent during normal runs unless `--stdout` is supplied.
+
+See [SETUP.md](SETUP.md) for Linux setup, cron, rotation, IPv6 and troubleshooting.
+
+## Example record
+
+The following is an illustrative record, formatted here for readability. The actual log writes compact, single-line JSON. See [examples/observation.jsonl](examples/observation.jsonl).
+
+```json
+{
+  "schema_version": 1,
+  "event": "external_ip_observation",
+  "timestamp_utc": "2026-10-01T13:00:00Z",
+  "status": "ok",
+  "family": "ipv4",
+  "ip": "8.8.8.8",
+  "previous_ip": "1.1.1.1",
+  "changed": true,
+  "geoip": {
+    "status": "ok",
+    "provider": "ipwhois",
+    "cache_hit": false,
+    "lookup_at_utc": "2026-10-01T13:00:00Z",
+    "data": {
+      "country": "Example country",
+      "country_code": "XX",
+      "city": "Example city",
+      "asn": 15169,
+      "isp": "Example ISP"
+    }
+  },
+  "errors": []
+}
+```
+
+The full schema, including nullable fields, is described in [docs/LOG_FORMAT.md](docs/LOG_FORMAT.md).
+
+## What the observation means
+
+This records the network egress IP of the Linux host making the request. It does not query the Starlink router or reveal a router's private WAN address. Under CGNAT, the public IPv4 can be shared. A VPN, policy route or transparent gateway can change the observed egress. HTTP proxy environment variables are bypassed by default; set `network.bypass_proxy: false` to deliberately use them.
+
+GeoIP describes a provider's estimate for the public IP, which may reflect an ISP exit location rather than your premises. It is not GPS or proof of subscriber identity. Discovery and enrichment send requests to the configured third-party services. Logs remain local.
+
+The default discovery service is [ipify](https://www.ipify.org/). GeoIP uses the free [ipwho.is endpoint](https://ipwhois.io/documentation); consult its current terms, availability and quotas before deployment. Caching reduces requests, but rapidly changing IPs or many machines sharing an egress can still exhaust a quota. An HTTPS endpoint compatible with the ipwho.is schema can be substituted in YAML. Arbitrary provider schemas need a new adapter.
+
+## Commands and exit codes
+
+| Command | Purpose |
+| --- | --- |
+| `ipwatch run --config /absolute/config.yaml` | Sample if due; append JSONL |
+| `ipwatch run --config /absolute/config.yaml --force --stdout` | Sample immediately and also print the record |
+| `ipwatch check --config /absolute/config.yaml` | Validate configuration without network calls or writes |
+| `ipwatch cron-line --config /absolute/config.yaml` | Print a user-crontab entry |
+| `ipwatch --version` | Show version |
+
+| Exit code | Meaning |
+| --- | --- |
+| 0 | IP recorded, optional GeoIP failure, not due, or another run holds the lock |
+| 1 | IP discovery failed; an error record was appended |
+| 2 | Configuration or storage error; inspect stderr |
+
+## Repository layout
+
+```text
+external-ip-monitor/
+  README.md
+  SETUP.md
+  CHANGELOG.md
+  LICENSE
+  pyproject.toml
+  config.example.yaml
+  src/ipwatch/
+  tests/
+  docs/
+  examples/
+  .github/workflows/tests.yml
+```
+
+## Development and future extensions
+
+```bash
+.venv/bin/python -m pip install -e .
+.venv/bin/python -m unittest discover -s tests -v
+```
+
+The test suite uses fake responses and a local HTTPS server, including real curl subprocesses. It does not require public API connectivity or consume provider quotas. The HTTPS tests require `openssl`; they skip when curl or openssl is missing.
+
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for module boundaries and extension points. No database, alerting service, web server or background process is required for this release.
+
+## Upload to GitHub
+
+Create an empty repository in your GitHub account. Extract this ZIP, then run from the extracted directory:
+
+```bash
+git init -b main
+git add .
+git commit -m "Initial external IP monitor"
+git remote add origin https://github.com/YOUR_ACCOUNT/YOUR_REPOSITORY.git
+git push -u origin main
+```
+
+Use your own repository URL. The ZIP includes source and docs, without a virtualenv, Git history, live configuration, or collected IP history.
