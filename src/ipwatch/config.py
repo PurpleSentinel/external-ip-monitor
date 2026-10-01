@@ -1,6 +1,8 @@
 """Strict YAML configuration; relative paths are relative to the YAML file."""
 from dataclasses import dataclass
+from email.utils import parseaddr
 from pathlib import Path
+import re
 from urllib.parse import urlsplit
 import yaml
 
@@ -68,6 +70,35 @@ def https_url(value, name):
     return value
 
 
+def address(value, name):
+    value = string(value, name)
+    _, addr = parseaddr(value)
+    local, _, domain = addr.rpartition("@")
+    if (not local or not domain or any(c in value for c in ",;")
+            or any(c.isspace() for c in addr)):
+        raise ConfigError(f"{name} must be a single email address, optionally with a display name")
+    return value
+
+
+@dataclass(frozen=True)
+class EmailConfig:
+    host: str
+    port: int
+    security: str
+    ca_file: Path | None
+    username: str | None
+    password_file: Path | None
+    password_env: str | None
+    sender: str
+    recipients: tuple[str, ...]
+    subject_prefix: str
+    timeout_seconds: int
+    notify_on: tuple[str, ...] = ("ip_change",)
+
+
+NOTIFY_TRIGGERS = ("ip_change", "country_change")
+
+
 @dataclass(frozen=True)
 class Config:
     source: Path
@@ -87,6 +118,57 @@ class Config:
     geo_endpoint: str
     geo_cache_ttl_minutes: int
     label: str | None
+    email: EmailConfig | None = None
+
+
+def load_email(section, resolve):
+    """Return EmailConfig when enabled, else None; values are validated either way."""
+    allowed = {"enabled", "notify_on", "smtp_host", "smtp_port", "security", "ca_file", "username",
+        "password_file", "password_env", "from", "to", "subject_prefix", "timeout_seconds"}
+    if isinstance(section, dict) and "password" in section:
+        raise ConfigError("email.password is not supported; use email.password_file or email.password_env")
+    em = mapping(section, "email", allowed)
+    enabled = boolean(em.get("enabled", False), "email.enabled")
+    notify_on = em.get("notify_on", ["ip_change"])
+    if (not isinstance(notify_on, list) or not notify_on or len(set(notify_on)) != len(notify_on)
+            or any(v not in NOTIFY_TRIGGERS for v in notify_on)):
+        raise ConfigError("email.notify_on must be a nonempty list of ip_change and/or country_change")
+    security = em.get("security", "starttls")
+    if security not in ("starttls", "tls"):
+        raise ConfigError("email.security must be starttls or tls; plaintext SMTP is not supported")
+    host = em.get("smtp_host")
+    if host is not None and (any(c.isspace() or c in "/@" for c in string(host, "email.smtp_host"))):
+        raise ConfigError("email.smtp_host must be a hostname")
+    port = integer(em.get("smtp_port", 587 if security == "starttls" else 465), "email.smtp_port", 1, 65535)
+    ca_file = em.get("ca_file")
+    ca_file = resolve(string(ca_file, "email.ca_file")) if ca_file is not None else None
+    username = em.get("username")
+    username = string(username, "email.username") if username is not None else None
+    password_file = em.get("password_file")
+    password_file = resolve(string(password_file, "email.password_file")) if password_file is not None else None
+    password_env = em.get("password_env")
+    if password_env is not None and not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", string(password_env, "email.password_env")):
+        raise ConfigError("email.password_env must be an environment variable name")
+    if username is not None and (password_file is None) == (password_env is None):
+        raise ConfigError("email.username requires exactly one of email.password_file or email.password_env")
+    if username is None and (password_file is not None or password_env is not None):
+        raise ConfigError("email.password_file/password_env require email.username")
+    sender = em.get("from")
+    sender = address(sender, "email.from") if sender is not None else None
+    recipients = em.get("to", [])
+    if not isinstance(recipients, list) or len(recipients) > 10:
+        raise ConfigError("email.to must be a list of up to 10 addresses")
+    recipients = tuple(address(v, "email.to") for v in recipients)
+    prefix = em.get("subject_prefix", "[ipwatch]")
+    if prefix != "":
+        prefix = string(prefix, "email.subject_prefix")
+    timeout = integer(em.get("timeout_seconds", 20), "email.timeout_seconds", 1, 120)
+    if not enabled:
+        return None
+    if host is None or sender is None or not recipients:
+        raise ConfigError("Enabled email requires email.smtp_host, email.from and at least one email.to")
+    return EmailConfig(host, port, security, ca_file, username, password_file, password_env,
+        sender, recipients, prefix, timeout, tuple(notify_on))
 
 
 def load_config(filename):
@@ -97,20 +179,24 @@ def load_config(filename):
         data = yaml.load(source.read_text(encoding="utf-8"), Loader=UniqueKeyLoader)
     except (OSError, yaml.YAMLError, UnicodeError) as exc:
         raise ConfigError(f"Cannot read configuration: {exc}") from exc
-    data = mapping(data, "config", {"interval_minutes", "output", "network", "geoip", "label"})
+    data = mapping(data, "config", {"interval_minutes", "output", "network", "geoip", "label", "email"})
     out = mapping(data.get("output", {}), "output", {"log_file", "state_file", "lock_file"})
     net = mapping(data.get("network", {}), "network", {"family", "endpoints", "curl_binary",
         "timeout_seconds", "connect_timeout_seconds", "attempts", "bypass_proxy", "interface"})
     geo = mapping(data.get("geoip", {}), "geoip", {"enabled", "endpoint", "cache_ttl_minutes"})
+    def resolve(raw):
+        return (source.parent / Path(raw).expanduser()).resolve()
     def path(key, default):
-        raw = Path(string(out.get(key, default), f"output.{key}")).expanduser()
-        return (source.parent / raw).resolve()
+        return resolve(string(out.get(key, default), f"output.{key}"))
     log_file = path("log_file", "var/history.jsonl")
     state_file = path("state_file", "var/state.json")
     lock_file = path("lock_file", "var/run.lock")
+    email = load_email(data.get("email", {}), resolve)
     paths = [log_file, state_file, lock_file, source]
+    if email and email.password_file:
+        paths.append(email.password_file)
     if len(set(paths)) != len(paths):
-        raise ConfigError("Log, state, lock and configuration paths must be distinct")
+        raise ConfigError("Log, state, lock, configuration and password paths must be distinct")
     family = net.get("family", "ipv4")
     if family not in ("ipv4", "ipv6"):
         raise ConfigError("network.family must be ipv4 or ipv6")
@@ -123,6 +209,9 @@ def load_config(filename):
     if geo_endpoint.count("{ip}") != 1 or "{" in geo_endpoint.replace("{ip}", "") or "}" in geo_endpoint.replace("{ip}", ""):
         raise ConfigError("geoip.endpoint must contain exactly one {ip} placeholder")
     https_url(geo_endpoint.replace("{ip}", "8.8.8.8"), "geoip.endpoint")
+    geo_enabled = boolean(geo.get("enabled", True), "geoip.enabled")
+    if email and "country_change" in email.notify_on and not geo_enabled:
+        raise ConfigError("email.notify_on: country_change requires geoip.enabled: true")
     timeout = integer(net.get("timeout_seconds", 15), "network.timeout_seconds", 1, 120)
     connect = integer(net.get("connect_timeout_seconds", 5), "network.connect_timeout_seconds", 1, timeout)
     interface = net.get("interface")
@@ -133,6 +222,6 @@ def load_config(filename):
         integer(net.get("attempts", 2), "network.attempts", 1, 3),
         boolean(net.get("bypass_proxy", True), "network.bypass_proxy"),
         string(interface, "network.interface") if interface is not None else None,
-        boolean(geo.get("enabled", True), "geoip.enabled"), geo_endpoint,
+        geo_enabled, geo_endpoint,
         integer(geo.get("cache_ttl_minutes", 1440), "geoip.cache_ttl_minutes", 0, 525600),
-        string(label, "label") if label is not None else None)
+        string(label, "label") if label is not None else None, email)

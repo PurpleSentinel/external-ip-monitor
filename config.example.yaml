@@ -22,3 +22,19 @@ geoip:
   enabled: true
   endpoint: https://ipwho.is/{ip}  # Adapter requires the ipwho.is response schema
   cache_ttl_minutes: 1440         # Refresh once per day for an unchanged IP; 0 disables reuse
+
+email:
+  enabled: false                  # true: send change emails
+  notify_on: [ip_change]          # ip_change and/or country_change (GeoIP country code)
+  smtp_host: smtp.example.com
+  smtp_port: 587                  # Default: 587 for starttls, 465 for tls
+  security: starttls              # starttls or tls (implicit TLS); plaintext SMTP is not supported
+  ca_file: null                   # Optional PEM CA bundle; default is the system CA store
+  username: you@example.com       # null only for a server that accepts mail without login
+  password_file: ~/.config/ipwatch/smtp-password  # Mode 0600; first line is the password
+  password_env: null              # Alternative to password_file: environment variable name
+  from: ipwatch <you@example.com>
+  to:
+    - you@example.com
+  subject_prefix: "[ipwatch]"
+  timeout_seconds: 20             # Per SMTP network operation

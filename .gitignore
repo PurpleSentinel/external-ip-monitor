@@ -2,6 +2,12 @@
 config.yaml
 var/
 
+# SMTP password files, in case one is placed inside the repository
+# (the recommended location is ~/.config/ipwatch/, outside it)
+smtp-password
+smtp-password.*
+secrets/
+
 # Python build and environment artifacts
 .venv/
 build/

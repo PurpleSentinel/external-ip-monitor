@@ -59,7 +59,7 @@ Validate and make the first observation:
 .venv/bin/ipwatch run --config "$PWD/config.yaml" --force --stdout
 ```
 
-`check` validates YAML syntax and values; it does not verify filesystem permissions, curl availability or network reachability. `--force` still respects the process lock and reserves the next interval. The live `config.yaml` and `var/` are listed in `.gitignore` because they contain your IP and location history. The first successful sample has `changed: null` because there is no previous observation.
+`check` validates YAML syntax and values and, when email is enabled, the password file or variable and any `ca_file`; it does not verify output permissions, curl availability or network reachability. `--force` still respects the process lock and reserves the next interval. The live `config.yaml` and `var/` are listed in `.gitignore` because they contain your IP and location history. The first successful sample has `changed: null` because there is no previous observation.
 
 ## 4. Set up cron
 
@@ -121,6 +121,68 @@ output:
 
 Generate a separate cron line for it. IPv4 and IPv6 are independent observations and may be made at slightly different times. Keep all three output paths distinct between configurations. IPv6 must be usable on the Linux host. The observed IPv6 address may belong to the host rather than the router, and host privacy addresses can change independently of the ISP's delegated prefix.
 
+## 7. Email notifications (optional)
+
+The tool can email you when the observed IP changes, when the GeoIP country changes, or both. Choose with `notify_on`:
+
+| `notify_on` | Email when |
+| --- | --- |
+| `[ip_change]` (default) | The public IP differs from the last successful observation |
+| `[country_change]` | The GeoIP country code differs from the last known country; IP changes within a country are logged but not emailed |
+| `[ip_change, country_change]` | Either; a sample where both changed sends one email, headed as a country change |
+
+Only changes trigger email: the first observation, unchanged samples and failed discoveries do not. Country detection needs GeoIP enabled, and reflects the provider's database, not a physical location. For example, Starlink addresses are often placed in the country of the ground-station point of presence or of registration, which can differ from where the dish is. If GeoIP fails when the IP changes, the country change is reported at the next successful lookup.
+
+Store the SMTP password in a file only you can read. Most large providers require an app password rather than your normal login password.
+
+```bash
+mkdir -p ~/.config/ipwatch
+( umask 077; printf '%s\n' 'YOUR-APP-PASSWORD' > ~/.config/ipwatch/smtp-password )
+```
+
+Typing the password on the command line leaves it in shell history; to avoid that, open the file in an editor instead and then run `chmod 600` on it. The tool refuses a password file that is group- or world-readable, not owned by you, or a symlink. Keep it outside the repository; as a safety net, `.gitignore` also excludes files named `smtp-password` or `smtp-password.*` and any `secrets/` directory. Alternatively, set `password_env` to the name of an environment variable; cron starts with a minimal environment, so the file is usually simpler.
+
+Then enable the `email` section of `config.yaml`:
+
+```yaml
+email:
+  enabled: true
+  notify_on: [country_change]   # or [ip_change], or both
+  smtp_host: smtp.gmail.com
+  security: starttls              # port 587 by default; use tls for port 465
+  username: you@gmail.com
+  password_file: ~/.config/ipwatch/smtp-password
+  from: ipwatch <you@gmail.com>
+  to:
+    - you@gmail.com
+```
+
+Validate, then send a test message:
+
+```bash
+.venv/bin/ipwatch check --config "$PWD/config.yaml"
+.venv/bin/ipwatch test-email --config "$PWD/config.yaml"
+```
+
+Common settings follow. Providers change their policies, so confirm them in your provider's documentation.
+
+| Provider | `smtp_host` | `security` / port | Notes |
+| --- | --- | --- | --- |
+| Gmail | `smtp.gmail.com` | `starttls` / 587 or `tls` / 465 | Needs 2-Step Verification and an app password |
+| Fastmail | `smtp.fastmail.com` | `tls` / 465 | Needs an app password |
+| iCloud Mail | `smtp.mail.me.com` | `starttls` / 587 | Needs an app-specific password; `username` is your iCloud address |
+| Microsoft 365 / Outlook.com | `smtp.office365.com` | `starttls` / 587 | Microsoft is retiring password-based SMTP AUTH; it may be disabled for your account |
+| Your own server or relay | its hostname | as configured | Use `ca_file` if it has a private CA certificate |
+
+Plaintext SMTP, including an unencrypted local relay on port 25, is deliberately not supported. Certificate verification cannot be disabled; for a private CA, set `ca_file` to its PEM bundle.
+
+How delivery behaves:
+
+- The email is sent after the observation is appended to the log and the state is saved, while the run still holds the lock. SMTP adds up to `timeout_seconds` per network operation to that run.
+- If delivery fails, the notice stays in `state.json` (`notify_pending`) and is retried at each later due sample that discovers an IP. The run exits with code 3 and writes the reason to stderr, so keep the cron stderr redirect from section 4. Changes that occur before delivery succeeds are queued in order and sent together in one email, so a later IP-only change cannot hide an earlier country change. The queue holds up to 50 changes; beyond that, the oldest IP-only changes are dropped first and the email says how many. The JSONL log keeps everything.
+- If the server accepts some recipients and refuses others, the message is not resent; the refused addresses are reported on stderr.
+- Messages contain the new and previous IP, host, label, time, and GeoIP location and ISP when available. Treat them as you treat the log.
+
 ## Troubleshooting
 
 | Symptom | Action |
@@ -132,6 +194,8 @@ Generate a separate cron line for it. IPv4 and IPv6 are independent observations
 | Wrong IP due to proxy | Default bypasses explicit proxy environment variables; VPN and transparent routing still apply |
 | Wrong curl path | Set `network.curl_binary` to the output of `command -v curl` |
 | TLS errors | Check the system CA store and network interception; do not disable verification |
+| Exit code 3 / email not received | Run `ipwatch test-email`; check host, port, `security`, app password, and stderr. A queued notice retries at the next due sample |
+| Certificate verification failed | Check `smtp_host` matches the server certificate; for a private CA set `ca_file`. Do not route around verification |
 | Corrupt state | Stop cron briefly; preserve the damaged file, move it aside, then resume to create fresh state |
 
 Resetting state removes the prior IP baseline, cache and interval history. Preserve the JSONL log to retain evidence. If changing network family, use a new state file so the prior family is not reported as an IP change.

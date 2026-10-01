@@ -19,7 +19,7 @@ Public provider availability, quotas and geolocation accuracy remain runtime dep
 
 ## Unreleased changes
 
-Verified on Linux (Fedora 44) on 2026-10-01 with Python 3.14 and PyYAML 6.0.3: all 27 unittest tests passed, including a new regression test for start-up jitter at the interval boundary.
+Verified on Linux (Fedora 44) on 2026-10-01 with Python 3.14.7, OpenSSL 3.5.8 and PyYAML 6.0.3: all 57 unittest tests passed, with ResourceWarnings treated as errors. This includes a regression test for start-up jitter at the interval boundary and the email notification and country-change tests. SMTP integration tests run real `smtplib` against a local TLS SMTP server; no external mail provider was contacted.
 
 To reproduce:
 
