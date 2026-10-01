@@ -19,7 +19,7 @@ Public provider availability, quotas and geolocation accuracy remain runtime dep
 
 ## Unreleased changes
 
-Verified on Linux (Fedora 44) on 2026-10-01 with Python 3.14.7, OpenSSL 3.5.8 and PyYAML 6.0.3: all 57 unittest tests passed, with ResourceWarnings treated as errors. This includes a regression test for start-up jitter at the interval boundary and the email notification and country-change tests. SMTP integration tests run real `smtplib` against a local TLS SMTP server; no external mail provider was contacted.
+Verified on Linux (Fedora 44) on 2026-10-01 with Python 3.14.7, OpenSSL 3.5.8 and PyYAML 6.0.3: all 64 unittest tests passed, with ResourceWarnings treated as errors. This includes a regression test for start-up jitter at the interval boundary the email notification and country-change tests, and the systemd unit tests. The generated units passed `systemd-analyze --user verify` (systemd 259). An argument-printing unit, linked into the user manager, confirmed that a path containing spaces, `%h`, `$HOME`, quotes, a backslash and a semicolon reaches the program unchanged. SMTP integration tests run real `smtplib` against a local TLS SMTP server; no external mail provider was contacted.
 
 To reproduce:
 

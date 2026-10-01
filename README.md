@@ -1,6 +1,6 @@
 # External IP Monitor
 
-A small Linux CLI that records the public IP seen by an Internet service, enriches it with GeoIP data, and appends one serialized JSON object per line. Designed for cron, including Starlink connections, with no GUI or daemon.
+A small Linux CLI that records the public IP seen by an Internet service, enriches it with GeoIP data, and appends one serialized JSON object per line. Designed to run every minute from cron or a systemd user timer, including on Starlink connections, with no GUI or daemon.
 
 ## Features
 
@@ -9,7 +9,8 @@ A small Linux CLI that records the public IP seen by an Internet service, enrich
 - IPv4 or IPv6, selectable per configuration; optional interface binding.
 - Ordered discovery endpoints, bounded timeouts and configurable attempts.
 - Country, region, city, coordinates, timezone, ASN, ISP and organization enrichment.
-- GeoIP caching across cron invocations, with configurable refresh time.
+- GeoIP caching across invocations, with configurable refresh time.
+- Scheduling by cron (`cron-line`) or a systemd user timer (`systemd-units`), for distributions without cron such as Fedora Workstation.
 - Every scheduled observation retained, even when the IP is unchanged.
 - IP change detection against the last successful observation.
 - GeoIP country change detection, recorded on every observation.
@@ -36,16 +37,25 @@ cp config.example.yaml config.yaml
 # Edit config.yaml as needed.
 .venv/bin/ipwatch check --config "$PWD/config.yaml"
 .venv/bin/ipwatch run --config "$PWD/config.yaml" --force --stdout
-.venv/bin/ipwatch cron-line --config "$PWD/config.yaml"
 ```
 
-Paste the final command's output into `crontab -e` for the same user. It prints a line containing absolute paths to the current Python interpreter and YAML file. It does not alter your crontab.
+Then schedule it to run every minute, with **either** a systemd user timer (no root needed; the choice on systems without cron, such as Fedora Workstation):
 
-Cron calls the tool every minute. `interval_minutes` in YAML determines when a sample is due. Set it to `5`, `7`, `90`, or any positive whole number up to 525600. A sample is due once the interval minus 30 seconds has passed since the previous attempt started; the slack absorbs Python start-up jitter so a 5-minute interval does not slip to 6 minutes. There is no need to change the cron line when changing the interval. Avoid combining this gate with an `*/X` cron entry, which can delay observations further.
+```bash
+.venv/bin/ipwatch systemd-units --config "$PWD/config.yaml" --write
+systemctl --user daemon-reload
+systemctl --user enable --now ipwatch.timer
+```
+
+**or** cron, by pasting the output of `.venv/bin/ipwatch cron-line --config "$PWD/config.yaml"` into `crontab -e` for the same user.
+
+Both commands generate entries with absolute paths to the current Python interpreter and YAML file. `cron-line` only prints; `systemd-units --write` installs the unit files but does not enable them. See [SETUP.md](SETUP.md#4-schedule-it) for details.
+
+The scheduler calls the tool every minute. `interval_minutes` in YAML determines when a sample is due. Set it to `5`, `7`, `90`, or any positive whole number up to 525600. A sample is due once the interval minus 30 seconds has passed since the previous attempt started; the slack absorbs Python start-up jitter so a 5-minute interval does not slip to 6 minutes. There is no need to change the schedule when changing the interval. Avoid combining this gate with an `*/X` cron entry or a less frequent timer, which can delay observations further.
 
 Default output is `var/history.jsonl`, relative to the YAML file's directory. Each newly written record occupies exactly one line. State and lock files live alongside it by default. The CLI stays silent during normal runs unless `--stdout` is supplied.
 
-See [SETUP.md](SETUP.md) for Linux setup, cron, rotation, IPv6, email notifications and troubleshooting.
+See [SETUP.md](SETUP.md) for Linux setup, scheduling (systemd timer or cron), rotation, IPv6, email notifications and troubleshooting.
 
 ## Example record
 
@@ -109,6 +119,7 @@ Optionally, the tool emails you when the observed IP changes, when its GeoIP cou
 | `ipwatch run --config /absolute/config.yaml --force --stdout` | Sample immediately and also print the record |
 | `ipwatch check --config /absolute/config.yaml` | Validate configuration without network calls or writes |
 | `ipwatch cron-line --config /absolute/config.yaml` | Print a user-crontab entry |
+| `ipwatch systemd-units --config /absolute/config.yaml [--write] [--name N]` | Print, or install, a systemd user service and timer |
 | `ipwatch test-email --config /absolute/config.yaml` | Send a test email with the configured SMTP settings |
 | `ipwatch --version` | Show version |
 

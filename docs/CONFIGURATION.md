@@ -4,7 +4,7 @@ Copy the supplied `config.example.yaml`. Omitted sections use defaults. Unknown 
 
 | Key | Default | Meaning |
 | --- | --- | --- |
-| `interval_minutes` | `5` | Whole minutes between attempt starts; 1 to 525600. A run is due 30 seconds early to absorb cron start-up jitter |
+| `interval_minutes` | `5` | Whole minutes between attempt starts; 1 to 525600. A run is due 30 seconds early to absorb scheduler start-up jitter |
 | `label` | `null` | Optional nonempty name for this connection |
 | `output.log_file` | `var/history.jsonl` | Append-only JSON Lines history |
 | `output.state_file` | `var/state.json` | Last attempt, last successful IP and GeoIP cache |
@@ -34,7 +34,7 @@ Copy the supplied `config.example.yaml`. Omitted sections use defaults. Unknown 
 | `email.subject_prefix` | `[ipwatch]` | Prepended to the subject; `""` for none |
 | `email.timeout_seconds` | `20` | Per SMTP network operation, 1 to 120 |
 
-Output paths and the configuration's own path must be distinct. Relative output paths resolve against the YAML file's parent. `~` expands to the executing user's home. An absolute curl path is recommended for cron. Use UTF-8 YAML.
+Output paths and the configuration's own path must be distinct. Relative output paths resolve against the YAML file's parent. `~` expands to the executing user's home. An absolute curl path is recommended for scheduled runs, which have a minimal `PATH`. Use UTF-8 YAML.
 
 HTTPS URLs must contain a hostname, cannot contain credentials or fragments, and cannot contain whitespace. Redirects are not followed; configure the final endpoint directly. Discovery expects only a public unicast IP, with optional surrounding whitespace. JSON discovery responses are not supported in version 0.1.0. ipify's plain-text default is suitable.
 

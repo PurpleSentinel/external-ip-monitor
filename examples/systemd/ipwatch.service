@@ -1,0 +1,14 @@
+# Example only: generate units with your real absolute paths using
+#   .venv/bin/ipwatch systemd-units --config "$PWD/config.yaml" --write
+[Unit]
+Description=ipwatch external IP observation (/home/YOUR_USER/external-ip-monitor/config.yaml)
+Documentation=https://github.com/PurpleSentinel/external-ip-monitor
+
+[Service]
+Type=oneshot
+ExecStart=/home/YOUR_USER/external-ip-monitor/.venv/bin/python -m ipwatch run --config /home/YOUR_USER/external-ip-monitor/config.yaml
+# 1: IP discovery failed (an error record was written). 3: change email queued for retry.
+SuccessExitStatus=1 3
+# The tool bounds its own requests; this only stops a run that is stuck regardless.
+TimeoutStartSec=30min
+NoNewPrivileges=yes

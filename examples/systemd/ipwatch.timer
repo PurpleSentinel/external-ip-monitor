@@ -1,0 +1,13 @@
+# Example only: generate units with your real absolute paths using
+#   .venv/bin/ipwatch systemd-units --config "$PWD/config.yaml" --write
+[Unit]
+Description=Run ipwatch.service every minute; interval_minutes in the YAML decides when a sample is due
+
+[Timer]
+OnCalendar=*-*-* *:*:00
+# Fire on the minute, like cron. The default AccuracySec=1min would spread runs across
+# the minute, which the tool's 30-second due-time grace does not absorb.
+AccuracySec=1s
+
+[Install]
+WantedBy=timers.target
