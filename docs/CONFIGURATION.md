@@ -4,7 +4,7 @@ Copy the supplied `config.example.yaml`. Omitted sections use defaults. Unknown 
 
 | Key | Default | Meaning |
 | --- | --- | --- |
-| `interval_minutes` | `5` | Whole minutes between attempt starts; 1 to 525600 |
+| `interval_minutes` | `5` | Whole minutes between attempt starts; 1 to 525600. A run is due 30 seconds early to absorb cron start-up jitter |
 | `label` | `null` | Optional nonempty name for this connection |
 | `output.log_file` | `var/history.jsonl` | Append-only JSON Lines history |
 | `output.state_file` | `var/state.json` | Last attempt, last successful IP and GeoIP cache |

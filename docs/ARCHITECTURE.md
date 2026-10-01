@@ -3,7 +3,7 @@
 The process runs once and exits. Cron handles repeated invocation; an interval gate reads state under a nonblocking Linux `flock`. The lock remains held through network requests, append and state update. Independent configs need independent output paths.
 
 1. CLI parses a command and validates YAML.
-2. `run` acquires the lock, reads state and checks whether a sample is due.
+2. `run` acquires the lock, reads state and checks whether a sample is due (`interval_minutes × 60 − DUE_GRACE_SECONDS` since the last attempt; the 30-second grace absorbs cron start-up jitter).
 3. It atomically reserves the attempt start time.
 4. `discover` requests configured endpoints in order with curl, enforcing family and public-address validation.
 5. The enrichment adapter looks up the accepted IP or uses a valid cached lookup.
@@ -31,6 +31,6 @@ The current tool cannot distinguish whether an observed IPv4 changed because of 
 
 ## Verification
 
-The suite covers arbitrary-minute intervals, cross-hour behavior, force runs, backwards clocks, change detection across failures, IPv6, invalid/nonpublic addresses, fallback endpoints, GeoIP response validation, cache TTL and size bounds, malformed YAML/state, log write failures, permission defaults, process contention, and cron path quoting.
+The suite covers arbitrary-minute intervals, cross-hour behavior, start-up jitter around the due boundary, force runs, backwards clocks, change detection across failures, IPv6, invalid/nonpublic addresses, fallback endpoints, GeoIP response validation, cache TTL and size bounds, malformed YAML/state, log write failures, permission defaults, process contention, and cron path quoting.
 
 Process-boundary tests use a fake curl executable to inspect arguments and a local TLS server to exercise the real curl executable through the installed CLI. Local TLS checks verify both accepted certificates and rejection with an invalid CA bundle. Public provider availability is an operational dependency, not a condition for these deterministic tests.

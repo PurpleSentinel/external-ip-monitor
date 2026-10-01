@@ -33,9 +33,9 @@ Python needs access to a package index to install PyYAML and build tooling. Norm
 
 ## 2. Install the application
 
-Extract the archive into a permanent directory owned by the user who will run cron, such as `$HOME/external-ip-monitor`. Keep it there: moving a Python virtualenv can break its executable paths.
+Clone the repository into a permanent directory owned by the user who will run cron, such as `$HOME/external-ip-monitor`. Keep it there: moving a Python virtualenv can break its executable paths.
 
-From inside the extracted directory:
+From inside the cloned directory:
 
 ```bash
 python3 -m venv .venv
@@ -59,7 +59,7 @@ Validate and make the first observation:
 .venv/bin/ipwatch run --config "$PWD/config.yaml" --force --stdout
 ```
 
-`check` validates YAML syntax and values; it does not verify filesystem permissions, curl availability or network reachability. `--force` still respects the process lock and reserves the next interval. The first successful sample has `changed: null` because there is no previous observation.
+`check` validates YAML syntax and values; it does not verify filesystem permissions, curl availability or network reachability. `--force` still respects the process lock and reserves the next interval. The live `config.yaml` and `var/` are listed in `.gitignore` because they contain your IP and location history. The first successful sample has `changed: null` because there is no previous observation.
 
 ## 4. Set up cron
 
@@ -86,7 +86,7 @@ Keep stderr visible through your cron implementation's error handling, or append
 
 Normal runs produce no stdout. `--stdout` can be useful interactively; adding it to cron may produce mail for every sample on systems configured for cron mail.
 
-The first cron run samples immediately if state does not exist. Later runs measure the interval from the last attempt's start time. An interval of seven minutes stays seven minutes across an hour boundary. Cron resolution and delays can make it longer; this is best-effort sampling, not a precise timer. Missed samples are not backfilled. On a backward clock adjustment, the next invocation samples immediately and establishes a new baseline. UTC timestamps and synchronized system time help interpret the history.
+The first cron run samples immediately if state does not exist. Later runs measure the interval from the last attempt's start time, with 30 seconds of slack: a run is due once `interval_minutes × 60 − 30` seconds have elapsed. Because cron fires on the minute, this keeps a seven-minute interval at seven minutes, including across an hour boundary, even when Python start-up time varies between runs. After a manual `--force` run partway through a minute, the next sample lands on the first cron tick at least `interval − 30 s` later. Cron delays or a lock held by a slow previous run can still make an interval longer; this is best-effort sampling, not a precise timer. Missed samples are not backfilled. On a backward clock adjustment, the next invocation samples immediately and establishes a new baseline. UTC timestamps and synchronized system time help interpret the history.
 
 ## 5. Read and rotate logs
 

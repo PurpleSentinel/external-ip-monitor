@@ -14,7 +14,7 @@ A small Linux CLI that records the public IP seen by an Internet service, enrich
 - IP change detection against the last successful observation.
 - Failure records, and partial records when GeoIP enrichment is unavailable.
 - Linux process locking and atomic state replacement.
-- Tests and a GitHub Actions workflow.
+- Unit and local HTTPS integration tests.
 
 ## Quick start
 
@@ -25,7 +25,7 @@ sudo apt-get update
 sudo apt-get install python3 python3-venv curl
 ```
 
-Extract the ZIP, enter the repository, then:
+Clone the repository, enter it, then:
 
 ```bash
 python3 -m venv .venv
@@ -39,7 +39,7 @@ cp config.example.yaml config.yaml
 
 Paste the final command's output into `crontab -e` for the same user. It prints a line containing absolute paths to the current Python interpreter and YAML file. It does not alter your crontab.
 
-Cron calls the tool every minute. `interval_minutes` in YAML determines when a sample is due. Set it to `5`, `7`, `90`, or any positive whole number up to 525600. There is no need to change the cron line when changing the interval. Avoid combining this gate with an `*/X` cron entry, which can delay observations further.
+Cron calls the tool every minute. `interval_minutes` in YAML determines when a sample is due. Set it to `5`, `7`, `90`, or any positive whole number up to 525600. A sample is due once the interval minus 30 seconds has passed since the previous attempt started; the slack absorbs Python start-up jitter so a 5-minute interval does not slip to 6 minutes. There is no need to change the cron line when changing the interval. Avoid combining this gate with an `*/X` cron entry, which can delay observations further.
 
 Default output is `var/history.jsonl`, relative to the YAML file's directory. Each newly written record occupies exactly one line. State and lock files live alongside it by default. The CLI stays silent during normal runs unless `--stdout` is supplied.
 
@@ -109,14 +109,13 @@ external-ip-monitor/
   README.md
   SETUP.md
   CHANGELOG.md
-  LICENSE
+  .gitignore
   pyproject.toml
   config.example.yaml
   src/ipwatch/
   tests/
   docs/
   examples/
-  .github/workflows/tests.yml
 ```
 
 ## Development and future extensions
@@ -130,16 +129,8 @@ The test suite uses fake responses and a local HTTPS server, including real curl
 
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for module boundaries and extension points. No database, alerting service, web server or background process is required for this release.
 
-## Upload to GitHub
+## Keeping private data out of Git
 
-Create an empty repository in your GitHub account. Extract this ZIP, then run from the extracted directory:
+Your live `config.yaml` and everything under `var/` (history, state with the GeoIP cache, lock) record your public IP and estimated location. The repository's `.gitignore` excludes them, along with the virtualenv and build artifacts, so `git add .` does not pick them up. If you point `output.*` paths elsewhere inside the repository, add those paths to `.gitignore` too, and check `git status` before committing.
 
-```bash
-git init -b main
-git add .
-git commit -m "Initial external IP monitor"
-git remote add origin https://github.com/YOUR_ACCOUNT/YOUR_REPOSITORY.git
-git push -u origin main
-```
-
-Use your own repository URL. The ZIP includes source and docs, without a virtualenv, Git history, live configuration, or collected IP history.
+No license file is included yet; add one before publishing if you want others to reuse the code.
