@@ -118,7 +118,7 @@ crontab -e
 Paste the printed line. An example, using illustrative absolute paths:
 
 ```cron
-* * * * * /home/mark/external-ip-monitor/.venv/bin/python -m ipwatch run --config /home/mark/external-ip-monitor/config.yaml
+* * * * * /home/YOUR_USER/external-ip-monitor/.venv/bin/python -m ipwatch run --config /home/YOUR_USER/external-ip-monitor/config.yaml
 ```
 
 This is a **user crontab** line. `/etc/cron.d` needs an additional username field and is not the format printed by this command. The tool quotes paths containing spaces and escapes cron's special percent characters.
@@ -126,7 +126,7 @@ This is a **user crontab** line. `/etc/cron.d` needs an additional username fiel
 Keep stderr visible through your cron implementation's error handling, or append an absolute error-file redirect:
 
 ```cron
-* * * * * /home/mark/external-ip-monitor/.venv/bin/python -m ipwatch run --config /home/mark/external-ip-monitor/config.yaml 2>>/home/mark/external-ip-monitor/cron-errors.log
+* * * * * /home/YOUR_USER/external-ip-monitor/.venv/bin/python -m ipwatch run --config /home/YOUR_USER/external-ip-monitor/config.yaml 2>>/home/YOUR_USER/external-ip-monitor/cron-errors.log
 ```
 
 Normal runs produce no stdout. `--stdout` can be useful interactively; adding it to cron may produce mail for every sample on systems configured for cron mail.
