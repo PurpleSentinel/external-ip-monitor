@@ -1,9 +1,9 @@
 # Architecture and extension points
 
-The process runs once and exits. Cron handles repeated invocation; an interval gate reads state under a nonblocking Linux `flock`. The lock remains held through network requests, append and state update. Independent configs need independent output paths.
+The process runs once and exits. Cron or a systemd user timer handles repeated invocation; an interval gate reads state under a nonblocking Linux `flock`. The lock remains held through network requests, append and state update. Independent configs need independent output paths.
 
 1. CLI parses a command and validates YAML.
-2. `run` acquires the lock, reads state and checks whether a sample is due (`interval_minutes × 60 − DUE_GRACE_SECONDS` since the last attempt; the 30-second grace absorbs cron start-up jitter).
+2. `run` acquires the lock, reads state and checks whether a sample is due (`interval_minutes × 60 − DUE_GRACE_SECONDS` since the last attempt; the 30-second grace absorbs scheduler and start-up jitter).
 3. It atomically reserves the attempt start time.
 4. `discover` requests configured endpoints in order with curl, enforcing family and public-address validation.
 5. The enrichment adapter looks up the accepted IP or uses a valid cached lookup.
@@ -19,7 +19,8 @@ The process runs once and exits. Cron handles repeated invocation; an interval g
 | `storage.py` | Locking, JSONL append, atomic JSON state | Add remote forwarding or database sink as a separate layer |
 | `monitor.py` | Scheduling gate, observation, IP and country change detection, caching, notification queue | Add further alert channels after a successful durable observation |
 | `notify.py` | Email composition, password loading, TLS-verified SMTP delivery | Add other notification transports behind the same queue |
-| `cli.py` | Commands, exit codes and generated cron line | Add export/query commands without altering cron behavior |
+| `cli.py` | Commands, exit codes and generated cron line | Add export/query commands without altering scheduled behavior |
+| `systemd.py` | systemd user service/timer generation, escaping and installation | Add other schedulers' unit formats |
 
 No provider SDK is required; PyYAML is the only Python runtime dependency. Email uses the standard library's `smtplib`, `ssl` and `email` modules. Linux-specific `fcntl`, `/proc/self/fd`, and directory fsync are deliberate because this release targets Linux.
 
@@ -33,6 +34,6 @@ The current tool cannot distinguish whether an observed IPv4 changed because of 
 
 ## Verification
 
-The suite covers arbitrary-minute intervals, cross-hour behavior, start-up jitter around the due boundary, force runs, backwards clocks, change detection across failures, IPv6, invalid/nonpublic addresses, fallback endpoints, GeoIP response validation, cache TTL and size bounds, malformed YAML/state, log write failures, permission defaults, process contention, and cron path quoting. Email tests cover configuration validation, `notify_on` trigger selection, country baselines across GeoIP failures, queue ordering and overflow, password-file permissions, message content, queueing and retry, and old-state compatibility. They also drive real `smtplib` against a local SMTP server over STARTTLS and implicit TLS, checking certificate rejection, a server without STARTTLS, failed authentication and partially refused recipients.
+The suite covers arbitrary-minute intervals, cross-hour behavior, start-up jitter around the due boundary, force runs, backwards clocks, change detection across failures, IPv6, invalid/nonpublic addresses, fallback endpoints, GeoIP response validation, cache TTL and size bounds, malformed YAML/state, log write failures, permission defaults, process contention, and cron path quoting. systemd unit tests cover content, name validation, `%`/`$`/quote escaping, idempotent and non-clobbering installation, and acceptance by `systemd-analyze verify` for awkward paths. Email tests cover configuration validation, `notify_on` trigger selection, country baselines across GeoIP failures, queue ordering and overflow, password-file permissions, message content, queueing and retry, and old-state compatibility. They also drive real `smtplib` against a local SMTP server over STARTTLS and implicit TLS, checking certificate rejection, a server without STARTTLS, failed authentication and partially refused recipients.
 
 Process-boundary tests use a fake curl executable to inspect arguments and a local TLS server to exercise the real curl executable through the installed CLI. Local TLS checks verify both accepted certificates and rejection with an invalid CA bundle. Public provider availability is an operational dependency, not a condition for these deterministic tests.

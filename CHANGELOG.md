@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Add `ipwatch systemd-units` to print, or `--write`, a systemd user service and timer, for hosts without cron such as Fedora Workstation. The timer fires on the minute (`AccuracySec=1s`), and exit codes 1 and 3 count as success. Paths are escaped for systemd's `%` and `$` handling. Installation never silently replaces changed unit files.
 - Record GeoIP country change on every observation: new `country_code`, `previous_country_code` and `country_changed` log fields, with the baseline kept in state (`last_country_code`). A GeoIP failure does not reset the baseline.
 - Add optional email notification (`email` YAML section, off by default), triggered by IP change, GeoIP country change, or both (`email.notify_on`). Undelivered notices queue in order (up to 50), so a later IP-only change cannot hide an earlier country change. Uses SMTP over STARTTLS or implicit TLS only, with certificate and hostname verification and TLS 1.2 minimum, and stops before login if STARTTLS is not offered.
 - The SMTP password comes from a 0600 file owned by the user, or an environment variable; inline YAML passwords are rejected.
