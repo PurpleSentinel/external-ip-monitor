@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.0.1 - 2026-10-02
 
 - Add the MIT `LICENSE` and declare it in package metadata (`license = "MIT"`).
 

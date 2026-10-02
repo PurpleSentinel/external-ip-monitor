@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "external-ip-monitor"
-version = "1.0.0"
+version = "1.0.1"
 description = "Cron- or systemd-timer-driven external IP history with GeoIP enrichment and JSON Lines logging"
 readme = "README.md"
 license = "MIT"
