@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Add the MIT `LICENSE` and declare it in package metadata (`license = "MIT"`).
+
 ## 1.0.0 - 2026-10-01
 
 - Add [docs/SYSTEMD.md](docs/SYSTEMD.md): how the systemd timer works; behaviour across login, logout, lingering, boot and suspend; control commands; drop-in customisation; logs, exit codes and troubleshooting.

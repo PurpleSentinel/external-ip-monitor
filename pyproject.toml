@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -7,6 +7,8 @@ name = "external-ip-monitor"
 version = "1.0.0"
 description = "Cron- or systemd-timer-driven external IP history with GeoIP enrichment and JSON Lines logging"
 readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
 requires-python = ">=3.10"
 dependencies = ["PyYAML>=6.0.2,<7"]
 

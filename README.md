@@ -137,6 +137,7 @@ external-ip-monitor/
   README.md
   SETUP.md
   CHANGELOG.md
+  LICENSE
   .gitignore
   pyproject.toml
   config.example.yaml
@@ -161,4 +162,6 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for module boundaries and exten
 
 Your live `config.yaml` and everything under `var/` (history, state with the GeoIP cache, lock) record your public IP and estimated location. The repository's `.gitignore` excludes them, along with the virtualenv and build artifacts, so `git add .` does not pick them up. If you point `output.*` paths elsewhere inside the repository, add those paths to `.gitignore` too, and check `git status` before committing.
 
-No license file is included yet; add one before publishing if you want others to reuse the code.
+## License
+
+Released under the [MIT License](LICENSE).
